@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FileSystemAPI</title>
+    <style>
+        #log {
+            width: 956px;
+            height: 1280px;
+            border: 3px black solid;
+            font-size: 38px;
+            overflow-x: hidden;
+            overflow-y: auto;
+            word-wrap:break-word;
+        }
+        #cmd {
+            width: 956px;
+            height: 60px;
+            border: 1px black solid;
+            font-size: 38px;
+        }
+        button {
+            width: 318px;
+            height: 60px;
+            font-size: 50px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id = "log">
+        <pre>
+    save
+    getSize
+    truncate [ size ]
+    seek [ position ]
+    read [ position size ]
+    write [ data position ]
+        </pre>
+    </div>
+    <br>
+    <input type = "text" id = "cmd" />
+    <br><br>
+    <button id = "newFile">newFile</button>
+    <button id = "clear">clear</button>
+    <button id = "sendCmd">sendCmd</button>
+    <br><br>
+    <button id = "showOpenFilePicker">OpenFile</button>
+    <button id = "showSaveFilePicker">SaveFile</button>
+    <button id = "showDirectoryPicker">Directory</button>
+    
+    <script>
+        const logDiv = document.getElementById("log");
+        const cmd = document.getElementById("cmd");
+        const btnNewFile = document.getElementById("newFile");
+        const btnClear = document.getElementById("clear");
+        const btnSendCmd = document.getElementById("sendCmd");
+        const btnOpenFile = document.getElementById("showOpenFilePicker");
+        const btnSaveFile = document.getElementById("showSaveFilePicker");
+        const btnDirectory = document.getElementById("showDirectoryPicker");
+        
+        btnNewFile.onclick = function() {
+            worker.postMessage(["newFile"]);
+        }
+        
+        btnClear.onclick = function() {
+            clear();
+        }
+        
+        btnSendCmd.onclick = function() {
+            cmd.value && worker.postMessage(cmd.value);
+            cmd.value = "";
+        }
+        
+        btnOpenFile.onclick = async function() {
+            const handles = await window.showOpenFilePicker();
+            worker.postMessage(["openFile", handles[0]]);
+        }
+        
+        btnSaveFile.onclick = async function() {
+            const filehandle = await window.showSaveFilePicker()
+            worker.postMessage(["saveFile", filehandle]);
+        }
+        
+        btnDirectory.onclick = async function() {
+            logDirectory(await window.showDirectoryPicker());
+        }
+        
+        function log(msg) {
+            logDiv.innerHTML += "<br>" + msg;
+        }
+        
+        function clear() {
+            logDiv.innerHTML = "";
+        }
+        
+        async function logHandle(filehandle) {
+            log(`${filehandle.kind}: ${filehandle.name}`)
+        }
+        
+        async function logHandles(filehandles) {
+            for (let i=0; i < filehandles.length; i++) {
+                logHandle(filehandles[i]);
+            }
+        }
+        
+        async function logDirectory(directoryhandle) {
+            for await (const [key, value] of directoryhandle) {
+                logHandle(value)
+            }
+        }
+    </script>
+    <script>
+        var worker = new Worker("worker.js");
+        
+        worker.onmessage = async function(e) {
+            const data = e.data
+            if (Array.isArray(data)) {
+                const command = data.shift();
+                if (command === "verifyPermission") {
+                    const rt = await verifyPermission(...data);
+                    worker.postMessage({ command: "verifyPermission", result: rt})
+                }
+            }
+            else log(data)
+        }
+        
+        worker.onerror = function(err) {
+            alert(err.message || err);
+        }
+        
+        async function verifyPermission(fileHandle, mode) {
+            const opt = { mode: "readwrite" };
+            if ((await fileHandle.queryPermission(opt)) === "granted") {
+                return true;
+            }
+            if ((await fileHandle.requestPermission(opt)) === "granted") {
+                return true;
+            }
+            return false;
+        }
+    </script>
+</body>
+
+</html>
