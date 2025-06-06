@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ClipboardAPI</title>
+    <style>
+        textarea {
+            width: 472px;
+            height: 1080px;
+            font-size: 30px;
+        }
+        button {
+            width: 478px;
+            height: 100px;
+            font-size: 60px;
+        }
+    </style>
+</head>
+
+<body>
+    <textarea id="source"></textarea>
+    <textarea id="target"></textarea>
+    <button id="copy">copy</button>
+    <button id="pase">pase</button>
+    <script>
+        const textSource = document.getElementById("source");
+        const textTarget = document.getElementById("target");
+        const btnCopy = document.getElementById("copy");
+        const btnPase = document.getElementById("pase");
+        
+        async function catchError(callback, ...theArgs) {
+            try { await callback(...theArgs) }
+            catch (e) { textTarget.value = (`Error: ${e.message || e.toString()}`) }
+        }
+        
+        async function write() {
+            return navigator.clipboard.writeText(textSource.value)
+        }
+        
+        async function read() {
+            return navigator.clipboard.readText()
+        }
+        
+        btnCopy.onclick = () => catchError(async() => {
+            return await write()
+        })
+        
+        btnPase.onclick = () => catchError(async() => {
+            const text = await read();
+            textTarget.value = text;
+        })
+    </script>
+</body>
+
+</html>

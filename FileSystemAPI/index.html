@@ -90,6 +90,11 @@
         
         function log(msg) {
             logDiv.innerHTML += "<br>" + msg;
+            logDiv.scrollTo({
+                top: logDiv.scrollHeight,
+                left: 0,
+                behavior: "smooth",
+            });
         }
         
         function clear() {
@@ -132,7 +137,7 @@
         }
         
         async function verifyPermission(fileHandle, mode) {
-            const opt = { mode: "readwrite" };
+            const opt = { mode };
             if ((await fileHandle.queryPermission(opt)) === "granted") {
                 return true;
             }

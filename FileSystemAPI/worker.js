@@ -12,6 +12,40 @@ const CMD = {
         if (!checkFileHandle(fileHandle)) return;
         if (!(await verifyPermission(fileHandle, "read"))) return;
         
+        const accessHandle = await tempFileHandle.createSyncAccessHandle();
+        const file = await fileHandle.getFile();
+        const readableStream = file.stream();
+        const reader = readableStream.getReader({ mode: "byob"});
+        let buffer = new ArrayBuffer(1024 * 1024 * 2);
+        
+        accessHandle.truncate(0);
+        await readStream(reader);
+        accessHandle.flush();
+        accessHandle.close();
+        
+        function readStream(reader) {
+            let offset = 0;
+            let bytesReceived = 0;
+            return reader
+                .read(new Uint8Array(buffer))
+                .then(function processText({ done, value }) {
+                    if (done) {
+                        postMessage(`load() complete. Total bytes: ${bytesReceived}`);
+                        return;
+                    }
+                    accessHandle.write(value, { at: offset });
+                    buffer = value.buffer;
+                    offset += value.byteLength;
+                    bytesReceived += value.byteLength;
+                    if (!(offset & 0x1FFFFFF)) {
+                        postMessage(`flush Total bytes: ${bytesReceived}`);
+                        accessHandle.flush();
+                    }
+                    return reader
+                        .read(new Uint8Array(buffer))
+                        .then(processText);
+                });
+        }
     },
     save: async function() {
         if (!checkFileHandle(fileHandle)) return;
@@ -19,7 +53,7 @@ const CMD = {
         
         let chunk;
         let position = 0;
-        let chunkSize = 1024 * 1024;
+        let chunkSize = 1024 * 1024 * 2;
         const accessHandle = await tempFileHandle.createSyncAccessHandle();
         const writableStream = await fileHandle.createWritable();
         const size = accessHandle.getSize();
@@ -31,11 +65,12 @@ const CMD = {
             accessHandle.read(chunk, { at: position});
             await writableStream.write(chunk);
             position += chunkSize;
+            !(position & 0x1FFFFFF) && postMessage(`write Total bytes: ${position}`);
         }
         
         await writableStream.close();
         accessHandle.close();
-        postMessage(`save: ${fileHandle.name}`)
+        postMessage(`save() complete. Total bytes: ${position}`);
     },
     newFile: async function() {
         await this.truncate(0);
@@ -44,12 +79,13 @@ const CMD = {
     },
     openFile: async function(_fileHandle) {
         fileHandle = _fileHandle;
-        postMessage(`openFile: ${fileHandle.name}`)
+        postMessage(`openFile: ${fileHandle.name}`);
+        await this.load();
     },
     saveFile: async function(_fileHandle) {
         fileHandle = _fileHandle;
-        await this.save();
         postMessage(`saveFile: ${fileHandle.name}`);
+        await this.save();
     },
     getSize: async function() {
         const accessHandle = await tempFileHandle.createSyncAccessHandle();
