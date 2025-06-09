@@ -1,6 +1,7 @@
 var root;
 var fileHandle;
 var tempFileHandle;
+var testWriteFileHandle;
 
 async function catchError(callback, ...theArgs) {
     try { await callback(...theArgs)}
@@ -122,6 +123,55 @@ const CMD = {
         accessHandle.close();
         postMessage(`write: "${string}" position ${position}`);
     },
+    testRead: async function(bytes) {
+        const accessHandle = await tempFileHandle.createSyncAccessHandle();
+        postMessage(`testRead:`);
+        const bufSizes = [4, 8, 16, 1024, 1 << 20];
+        bytes = parseInt(bytes) || 1 << 23;
+        bytes = Math.min(bytes, accessHandle.getSize());
+        for (let i = 0; i < bufSizes.length; i++) {
+            let offset = 0;
+            const bufSize = bufSizes[i];
+            const buffer = new DataView(new ArrayBuffer(bufSize));
+            postMessage(`read ${bytes} bytes`);
+            postMessage(`chunk is ${bufSize} bytes`);
+            const t = new Date().getTime()
+            while(offset < bytes) {
+                accessHandle.read(buffer, { at: offset});
+                offset += bufSize;
+            }
+            postMessage(`time: ${new Date().getTime() - t}`)
+        }
+        postMessage(`end`)
+        accessHandle.flush();
+        accessHandle.close();
+    },
+    testWrite: async function(bytes = 1 << 23) {
+        const accessHandle = await testWriteFileHandle.createSyncAccessHandle();
+        postMessage(`testWrite:`);
+        const readBufferSize = 1 << 27;
+        const readBuffer = new ArrayBuffer(readBufferSize);
+        const writeSizes = [4, 8, 16, 1024, 1 << 20];
+        bytes = parseInt(bytes) || 1 << 23;
+        bytes = Math.min(bytes, readBufferSize);
+        for (let i = 0; i < writeSizes.length; i++) {
+            let offset = 0;
+            const writeSize = writeSizes[i];
+            postMessage(`write ${bytes} bytes`);
+            postMessage(`chunk is ${writeSize} bytes`);
+            const t = new Date().getTime()
+            while(offset < bytes) {
+                const u8 = new Uint8Array(readBuffer, offset, Math.min(writeSize, bytes - offset))
+                accessHandle.write(u8, { at: offset});
+                offset += writeSize;
+            }
+            accessHandle.flush();
+            postMessage(`time: ${new Date().getTime() - t}`)
+        }
+        postMessage(`end`)
+        accessHandle.flush();
+        accessHandle.close();
+    }
 }
 
 onmessage = async (e) => { await catchError(_onmessage, e) }
@@ -147,7 +197,12 @@ async function _onmessage(e) {
 async function init() {
     root = await navigator.storage.getDirectory();
     tempFileHandle = await root.getFileHandle("cache", {create: true});
-    const accessHandle = await tempFileHandle.createSyncAccessHandle();
+    let accessHandle = await tempFileHandle.createSyncAccessHandle();
+    accessHandle.truncate(0);
+    accessHandle.flush();
+    accessHandle.close();
+    testWriteFileHandle = await root.getFileHandle("testwrite", { create: true });
+    accessHandle = await testWriteFileHandle.createSyncAccessHandle();
     accessHandle.truncate(0);
     accessHandle.flush();
     accessHandle.close();
